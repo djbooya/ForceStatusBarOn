@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">ForceStatusBarOn</string>
+    <string name="prompt_title">Force Status Bar On</string>
+    <string name="prompt_current">Currently: %1$s</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="toast_on">Force Status Bar On: Yes</string>
+    <string name="toast_off">Force Status Bar On: No</string>
+    <string name="toast_need_overlay">Force Status Bar On: Yes — allow \"Display over other apps\" to finish</string>
+    <string name="channel_name">Status bar service</string>
+    <string name="notification_text">Keeping the status bar visible</string>
+</resources>
