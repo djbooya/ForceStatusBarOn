@@ -15,10 +15,14 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val current = getString(if (ForceSetting.isEnabled(this)) R.string.yes else R.string.no)
+        val enabled = ForceSetting.isEnabled(this)
+        var message = getString(R.string.prompt_current, getString(if (enabled) R.string.yes else R.string.no))
+        if (enabled && !Settings.canDrawOverlays(this)) message += getString(R.string.prompt_no_overlay)
+        message += getString(R.string.prompt_log, packageName)
+
         AlertDialog.Builder(this)
             .setTitle(R.string.prompt_title)
-            .setMessage(getString(R.string.prompt_current, current))
+            .setMessage(message)
             .setPositiveButton(R.string.yes) { _, _ -> choose(true) }
             .setNegativeButton(R.string.no) { _, _ -> choose(false) }
             .setOnCancelListener { finishAndRemoveTask() }

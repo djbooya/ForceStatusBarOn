@@ -16,6 +16,11 @@ object ForceSetting {
 
     /** Saves [enabled], starts or stops the service to match, and toasts the result. */
     fun save(context: Context, enabled: Boolean) {
+        DebugLog.init(context)
+        DebugLog.i(
+            "ForceSetting", "Saved ${if (enabled) "Yes" else "No"} " +
+                "(Display over other apps: ${if (AndroidSettings.canDrawOverlays(context)) "allowed" else "NOT allowed"})"
+        )
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putBoolean(KEY_ENABLED, enabled).apply()
         apply(context)

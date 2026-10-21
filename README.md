@@ -114,7 +114,30 @@ Some head units **force-stop** packages on sleep, which deletes alarms and block
 
 Starting an already-running service is harmless, so a shorter delay only costs a little CPU.
 
+## Debug Logs
+
+The app writes a log so problems can be diagnosed on units without ADB.
+
+**Log Location:** `Android/data/com.djbooya.forcestatusbaron.debug/files/logs/forcestatusbaron.log` (accessible via File Manager). The path is also shown in the app's prompt.
+
+**Log Contents:**
+- Android version, device model and display size each time the service starts
+- Whether **Display over other apps** is allowed
+- The replica bar's height, and whether its window was added (or the error if it wasn't)
+- Every change in the system status bar's reported state, e.g. `Real status bar HIDDEN (isVisible=false top=0 ...) -> replica shown`
+- Starts from Automate, boot and app updates
+
+**Automatic Cleanup:** Logs older than 24 hours are deleted when the app next starts.
+
 ## Release Notes
+
+### v1.1 (Oct 20, 2026)
+- **Fixed:** On some head units the home screen hides the status bar while it is still reported as "visible" with zero height, so the replica never appeared. The status bar now only counts as showing if it is reported visible **and** actually takes up space
+- **Fixed:** The invisible window that watches the status bar now has zero opacity, so it can never be counted as covering the app and block taps on Android 12+
+- **Added:** Debug log at `Android/data/com.djbooya.forcestatusbaron.debug/files/logs/forcestatusbaron.log`, recording every status bar change, the overlay permission and any error adding the bar. See [Debug Logs](#debug-logs)
+- **Added:** The prompt now shows the log location, and warns when **Display over other apps** isn't allowed (the bar can't be drawn without it)
+- **Note:** The transparent bar with a home button and clock that appears in split screen and in Waze is the radio's own status bar. Pulling it down opens the radio's running-apps panel. ForceStatusBarOn stays hidden while it is showing
+- **Download:** [ForceStatusBarOn-1.1-debug.apk](https://github.com/djbooya/ForceStatusBarOn/raw/main/app/build/outputs/apk/debug/ForceStatusBarOn-1.1-debug.apk)
 
 ### v1.0 (Oct 20, 2026)
 - **Added:** Single-screen prompt — **Force Status Bar On: Yes / No**. Choosing saves the setting, starts or stops the service, confirms with a toast (`Force Status Bar On: Yes` / `No`) and exits
@@ -127,8 +150,9 @@ Starting an already-running service is harmless, so a shorter delay only costs a
 ## Troubleshooting
 
 **Toast says Yes, but no bar appears over a full-screen app**
-- Make sure **Display over other apps** is allowed for ForceStatusBarOn (or use the ADB command above)
+- Open the app: if the prompt shows a "Display over other apps" warning, allow it for ForceStatusBarOn (or use the ADB command above)
 - Check that the persistent "Keeping the status bar visible" notification is present — if not, the service isn't running
+- Open the [debug log](#debug-logs) and look at the last `Real status bar ...` line written while the bar was missing. If it says `SHOWING` while you can't see the radio's bar, the radio is hiding its bar in a way Android doesn't report
 
 **Bar disappears after the radio sleeps**
 - Your unit is probably force-stopping the app. Set up the [Automate watchdog](#watchdog-for-units-that-force-stop-apps-on-sleep)
@@ -144,7 +168,7 @@ export JAVA_HOME="/path/to/Android/Studio/jbr"
 ./gradlew assembleDebug
 ```
 
-Output APK: `app/build/outputs/apk/debug/ForceStatusBarOn-1.0-debug.apk`
+Output APK: `app/build/outputs/apk/debug/ForceStatusBarOn-1.1-debug.apk`
 
 For a release build:
 ```bash

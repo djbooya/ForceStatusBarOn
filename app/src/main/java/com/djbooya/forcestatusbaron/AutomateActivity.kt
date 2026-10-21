@@ -15,6 +15,8 @@ class AutomateActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DebugLog.init(this)
+        DebugLog.i("AutomateActivity", "Started by Automate: action=${intent?.action}")
         when (intent?.action) {
             ACTION_ENABLE -> ForceSetting.save(this, true)
             ACTION_DISABLE -> ForceSetting.save(this, false)

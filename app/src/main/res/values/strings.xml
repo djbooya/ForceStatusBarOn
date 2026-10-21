@@ -7,6 +7,8 @@
     <string name="toast_on">Force Status Bar On: Yes</string>
     <string name="toast_off">Force Status Bar On: No</string>
     <string name="toast_need_overlay">Force Status Bar On: Yes — allow \"Display over other apps\" to finish</string>
+    <string name="prompt_no_overlay">\n\nWarning: \"Display over other apps\" is not allowed, so the bar can\'t be drawn.</string>
+    <string name="prompt_log">\n\nLog: Android/data/%1$s/files/logs/forcestatusbaron.log</string>
     <string name="channel_name">Status bar service</string>
     <string name="notification_text">Keeping the status bar visible</string>
 </resources>

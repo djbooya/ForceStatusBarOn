@@ -45,11 +45,23 @@ class StatusBarService : Service() {
     private var bar: View? = null
     private var batteryReceiver: BroadcastReceiver? = null
 
+    /** Last insets reading, so the log only records changes. */
+    private var lastInsetsReport: String? = null
+    private var loggedWaiting = false
+
     /** Polls for the overlay grant, since nothing notifies the app when it is given. */
     private val waitForPermission = object : Runnable {
         override fun run() {
-            if (Settings.canDrawOverlays(this@StatusBarService)) addOverlays()
-            else handler.postDelayed(this, PERMISSION_POLL_MS)
+            if (Settings.canDrawOverlays(this@StatusBarService)) {
+                if (loggedWaiting) DebugLog.i(TAG, "Display over other apps granted")
+                addOverlays()
+            } else {
+                if (!loggedWaiting) {
+                    DebugLog.w(TAG, "Display over other apps NOT granted - waiting for it")
+                    loggedWaiting = true
+                }
+                handler.postDelayed(this, PERMISSION_POLL_MS)
+            }
         }
     }
 
@@ -57,7 +69,14 @@ class StatusBarService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        DebugLog.init(this)
         windowManager = getSystemService(WindowManager::class.java)
+        val metrics = resources.displayMetrics
+        DebugLog.i(
+            TAG, "=== SERVICE STARTED === Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}), " +
+                "${Build.MANUFACTURER} ${Build.MODEL}, display ${metrics.widthPixels}x${metrics.heightPixels} " +
+                "@${metrics.density}x, app ${BuildConfig.VERSION_NAME}"
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -65,6 +84,7 @@ class StatusBarService : Service() {
         startInForeground()
         if (!ForceSetting.isEnabled(this)) {
             // Started externally (Automate, boot) while the setting is No.
+            DebugLog.i(TAG, "Setting is No - stopping")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -79,12 +99,14 @@ class StatusBarService : Service() {
         super.onConfigurationChanged(newConfig)
         // Status bar height can change with orientation; rebuild at the new size.
         if (tracker != null) {
+            DebugLog.i(TAG, "Configuration changed - rebuilding overlays")
             removeOverlays()
             addOverlays()
         }
     }
 
     override fun onDestroy() {
+        DebugLog.i(TAG, "=== SERVICE STOPPED ===")
         handler.removeCallbacksAndMessages(null)
         removeOverlays()
         super.onDestroy()
@@ -113,27 +135,48 @@ class StatusBarService : Service() {
     }
 
     private fun addOverlays() {
-        val barView = LayoutInflater.from(this).inflate(R.layout.overlay_bar, null)
-        barView.visibility = View.GONE
-        windowManager.addView(barView, barParams())
-        bar = barView
+        try {
+            val params = barParams()
+            val barView = LayoutInflater.from(this).inflate(R.layout.overlay_bar, null)
+            barView.visibility = View.GONE
+            windowManager.addView(barView, params)
+            bar = barView
+            DebugLog.i(TAG, "Replica bar added: height ${params.height}px, alpha ${params.alpha}")
 
-        val trackerView = View(this)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            trackerView.setOnApplyWindowInsetsListener { v, insets ->
-                setRealBarVisible(insets.isVisible(WindowInsets.Type.statusBars()))
-                v.onApplyWindowInsets(insets)
+            val trackerView = View(this)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                trackerView.setOnApplyWindowInsetsListener { v, insets ->
+                    onStatusBarInsets(insets)
+                    v.onApplyWindowInsets(insets)
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                trackerView.setOnSystemUiVisibilityChangeListener { flags ->
+                    setRealBarVisible(flags and View.SYSTEM_UI_FLAG_FULLSCREEN == 0, "systemUiVisibility=0x${Integer.toHexString(flags)}")
+                }
             }
-        } else {
-            @Suppress("DEPRECATION")
-            trackerView.setOnSystemUiVisibilityChangeListener { flags ->
-                setRealBarVisible(flags and View.SYSTEM_UI_FLAG_FULLSCREEN == 0)
-            }
+            windowManager.addView(trackerView, trackerParams())
+            tracker = trackerView
+
+            startBatteryUpdates(barView.findViewById(R.id.battery))
+        } catch (e: Exception) {
+            DebugLog.e(TAG, "Failed to add overlay windows", e)
+            removeOverlays()
         }
-        windowManager.addView(trackerView, trackerParams())
-        tracker = trackerView
+    }
 
-        startBatteryUpdates(barView.findViewById(R.id.battery))
+    /**
+     * The real bar counts as showing only if it is reported visible *and* takes up space.
+     * Some head-unit launchers hide it by collapsing it to zero height rather than through
+     * the normal hide request, which leaves it "visible" but invisible.
+     */
+    private fun onStatusBarInsets(insets: WindowInsets) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val type = WindowInsets.Type.statusBars()
+        val visible = insets.isVisible(type)
+        val top = insets.getInsets(type).top
+        val ignoring = insets.getInsetsIgnoringVisibility(type).top
+        setRealBarVisible(visible && top > 0, "isVisible=$visible top=$top topIgnoringVisibility=$ignoring")
     }
 
     private fun removeOverlays() {
@@ -143,9 +186,16 @@ class StatusBarService : Service() {
         bar?.let { windowManager.removeView(it) }
         tracker = null
         bar = null
+        lastInsetsReport = null
     }
 
-    private fun setRealBarVisible(visible: Boolean) {
+    private fun setRealBarVisible(visible: Boolean, reading: String) {
+        val report = "Real status bar ${if (visible) "SHOWING" else "HIDDEN"} ($reading) -> " +
+            "replica ${if (visible) "hidden" else "shown"}"
+        if (report != lastInsetsReport) {
+            DebugLog.i(TAG, report)
+            lastInsetsReport = report
+        }
         bar?.visibility = if (visible) View.GONE else View.VISIBLE
     }
 
@@ -203,6 +253,8 @@ class StatusBarService : Service() {
         PixelFormat.TRANSPARENT
     ).apply {
         gravity = Gravity.TOP or Gravity.START
+        // Fully transparent so it never counts as covering the app for touch purposes.
+        alpha = 0f
     }
 
     /** Height of the real status bar, whether or not it is currently showing. */
@@ -221,6 +273,7 @@ class StatusBarService : Service() {
     }
 
     companion object {
+        private const val TAG = "StatusBarService"
         private const val CHANNEL_ID = "status_bar_service"
         private const val NOTIFICATION_ID = 1
         private const val PERMISSION_POLL_MS = 2000L
